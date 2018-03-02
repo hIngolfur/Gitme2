@@ -1,4 +1,4 @@
-#Initial versio: Ver. 1.0
+#Initial versio: Ver. 1.1
 import threading
 
 def runner(number):
