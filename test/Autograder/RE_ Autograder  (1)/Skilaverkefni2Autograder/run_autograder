@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+
+# The autograder zip file will have been extracted to /autograder/source
+
+cd /autograder/source
+
+# 1. Our autograder zip file contains a "src" directory that has been
+# extracted by Gradescope into directory "/autograder/src".
+# 2. It contains the Java source code of our tests that we run against the student code.
+# Our autograder zip file contains also a "lib" directory with dependencies (JUnit JAR)
+# 3. Also, Gradescope has extracted the student code to directory "/autograder/submission/"
+# 4. We copy the student code to a "srcStudent" directory
+
+mkdir -p srcStudent
+
+cp -a /autograder/submission/*.java /autograder/source/srcStudent
+
+# Working directory is "/autograder/source" that contains already,
+# "src" directory with student source code and our testing source code
+# and "lib" directory with, e.g., JUnit jar.
+# Compiled code will got to "bin"
+
+mkdir -p bin
+
+# Find all java files in  {srcStudent} src directory (including sub-directories with our packages)
+# test source
+java_files=$(find src srcStudent -name "*.java")
+#echo $java_files
+
+# Check if the correct files are included
+
+klasar=("Utreikningur" "TvaerLinur")
+toCompile=("Utreikningur" "TvaerLinur")
+vantar="Eftirfarandi skrá(r) vantar: "
+compileSkilabod="Eftirfarandi skrá(r) hafa villu í þýðingu:"
+skrar=''
+#echo "Athuga hvort allar skrár séu til staðar"
+for daemi in "${klasar[@]}"; do
+  if [[ ! -f "srcStudent/${daemi}.java" ]]; then
+    echo "Skrána " ${daemi} " vantar"
+    skrar="${skrar} ${daemi}.java"
+    toCompile=("${toCompile[@]/${daemi}/}")
+    java_files=("${java_files[@]/"src/${daemi}Test.java"/}")
+   # java_files=("${java_files[@]/"srcStudent/${daemi}.java"/}")
+  fi
+done
+
+if [[ -n "$skrar" ]]; then
+  echo $vantar $skrar
+else
+  echo "Allar skrár til staðar"
+fi
+#Ef skrárnar eru ekki til staðar á samt að fara yfir þær sem eru eftir
+# Compile them into "bin" directory, including our "lib"
+
+# compile student code
+echo "á að þýða:"
+echo ${toCompile[@]}
+# þýðum alla þó svo þeir séu ekki til - athuga betur
+echo "Þýðing hefst..."
+for daemi in "${klasar[@]}"; do
+  echo "þýði ${daemi}.java"
+  javac -cp lib/*:. -d bin "srcStudent/${daemi}.java"
+  if [[ ! -f "bin/${daemi}.class" ]]; then
+    villaCompile+=("${daemi}.java")
+    #echo "villa í þýðingu"
+    echo $villaCompile
+    #Ekki þýða samsvarandi zzzTest skrá
+    java_files=("${java_files[@]/"src/${daemi}Test.java"/}")
+    java_files=("${java_files[@]/"srcStudent/${daemi}.java"/}")
+    #Taka út .class skrána úr src/RunTests svo hún verði ekki prófuð
+    sed -i s/"${daemi}Test.class,"/""/ src/RunTests.java
+  fi
+done
+
+if [[ ${#villaCompile[@]} -ne 0 ]]; then
+  echo $compileSkilabod ${villaCompile[@]}
+  #echo "Fjöldi skráa með villur" ${#villaCompile[@]} ${#klasar[@]}
+  # athuga hvort allar skrár eru með þýðingarvillur þá hætta
+  if [ ${#villaCompile[@]} -eq ${#klasar[@]} ]; then
+    echo "Allar skrár með villu í þýðingu " ${#villaCompile[@]} ${#klasar[@]}
+    echo {\"score\": 0.0, \"stdout_visibility\":\"visible\"} >/autograder/results/results.json
+    exit 0
+  fi
+fi
+
+#echo {\"score\": 0.0, \"stdout_visibility\":\"visible\"} > /autograder/results/results.json
+# Compile the test code
+#echo "Compiling the test code ${java_files}"
+javac -cp lib/*:.:bin/* -d bin $java_files
+# Run the autograder code, i.e. tests against student code
+
+echo "Prófanir byrja ..."
+
+# RunTests will print JSON result to stdout that is redirected to file  read by Gradescope
+
+# Hér verðum við að taka út þær skrár sem gáfu villur eða vantar
+
+java -cp bin/:lib/* RunTests >/autograder/results/results.json
+#cat /autograder/results/results.json
+
+sed -i 's/"tests"/"stdout_visibility":"visible","tests"/' /autograder/results/results.json
+
+#cat /autograder/results/results.json
+
+echo "Prófunum lokið, sjáið niðurstöður hér fyrir neðan"
